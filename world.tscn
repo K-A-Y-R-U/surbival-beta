@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://cl4bu71fyacbj"]
+
+[ext_resource type="PackedScene" uid="uid://ch3pkvolkiivn" path="res://player.tscn" id="1_f3sb7"]
+[ext_resource type="Script" uid="uid://cn5eoe3bgwa84" path="res://World.gd" id="1_fj7yv"]
+[ext_resource type="Script" uid="uid://bckgbra16lmwr" path="res://camera_pivot.gd" id="3_tlwt5"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_gv5m4"]
+size = Vector2(40, 40)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_tlwt5"]
+
+[sub_resource type="Environment" id="Environment_f3sb7"]
+background_mode = 2
+
+[node name="World" type="Node3D" unique_id=935076160]
+script = ExtResource("1_fj7yv")
+
+[node name="Player" parent="." unique_id=2099071126 instance=ExtResource("1_f3sb7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=2042520521]
+mesh = SubResource("PlaneMesh_gv5m4")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1377298501]
+shape = SubResource("CapsuleShape3D_tlwt5")
+
+[node name="Node3D" type="Node3D" parent="." unique_id=616985525]
+transform = Transform3D(1, 0, 0, 0, 0.99999994, 0, 0, 0, 0.99999994, 0, 0, 0)
+script = ExtResource("3_tlwt5")
+
+[node name="Camera3D" type="Camera3D" parent="Node3D" unique_id=1203782910]
+transform = Transform3D(1, 0, 0, 0, 0.4694716, 0.88294756, 0, -0.88294756, 0.4694716, 0, 15, 8)
+size = 10.0
+
+[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=1725064971]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1459553800]
+transform = Transform3D(0.8660254, 0.43301272, -0.24999999, 0, 0.49999997, 0.86602545, 0.5, -0.75, 0.43301266, 0, 0, 0)
+light_energy = 1.5
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1465559683]
+environment = SubResource("Environment_f3sb7")
