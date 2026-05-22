@@ -21,33 +21,48 @@ func _ready() -> void:
 
 func _cargar_iconos() -> void:
 	var rutas = {
-		"madera":  "res://textures/tree.png",
-		"piedra":  "res://textures/rock.png",
-		"tierra":  "res://textures/dirt.png",
-		"cesped":  "res://textures/grass_top.png",
+		"madera": "res://textures/tree.png",
+		"piedra": "res://textures/rock.png",
+		"tierra": "res://textures/dirt.png",
+		"cesped": "res://textures/grass_top.png",
 	}
 	for tipo in rutas:
 		if ResourceLoader.exists(rutas[tipo]):
 			iconos[tipo] = load(rutas[tipo])
 
 func _construir_hotbar() -> void:
-	var slot_size  = 64
-	var padding    = 6
-	var bar_w      = SLOTS * (slot_size + padding) + padding
-	var bar_h      = slot_size + padding * 2
+	var slot_size = 64
+	var padding   = 6
+	var bar_w     = SLOTS * (slot_size + padding) + padding
+	var bar_h     = slot_size + padding * 2
+
 	hotbar_panel = Panel.new()
 	hotbar_panel.name = "Hotbar"
 	hotbar_panel.size = Vector2(bar_w, bar_h)
-	hotbar_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	hotbar_panel.position.y = -bar_h - 8
+
+	# Centrado abajo sin estirar
+	hotbar_panel.anchor_left   = 0.5
+	hotbar_panel.anchor_right  = 0.5
+	hotbar_panel.anchor_top    = 1.0
+	hotbar_panel.anchor_bottom = 1.0
+	hotbar_panel.offset_left   = -bar_w / 2.0
+	hotbar_panel.offset_right  =  bar_w / 2.0
+	hotbar_panel.offset_top    = -bar_h - 8
+	hotbar_panel.offset_bottom = -8
+
 	var panel_style = StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.1, 0.1, 0.1, 0.75)
+	panel_style.bg_color                   = Color(0.1, 0.1, 0.1, 0.75)
 	panel_style.corner_radius_top_left     = 6
 	panel_style.corner_radius_top_right    = 6
 	panel_style.corner_radius_bottom_left  = 6
 	panel_style.corner_radius_bottom_right = 6
+	panel_style.border_width_top    = 0
+	panel_style.border_width_bottom = 0
+	panel_style.border_width_left   = 0
+	panel_style.border_width_right  = 0
 	hotbar_panel.add_theme_stylebox_override("panel", panel_style)
 	add_child(hotbar_panel)
+
 	slot_nodes.clear()
 	for i in range(SLOTS):
 		var slot = _crear_slot(i, slot_size, padding)
@@ -60,13 +75,14 @@ func _crear_slot(i: int, slot_size: int, padding: int) -> Control:
 	slot.size = Vector2(slot_size, slot_size)
 	slot.position = Vector2(padding + i * (slot_size + padding), padding)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 	var bg = Panel.new()
 	bg.name = "BG"
 	bg.size = Vector2(slot_size, slot_size)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var bg_style = StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.25, 0.25, 0.25, 0.9)
-	bg_style.border_color = Color(0.5, 0.5, 0.5, 1.0)
+	bg_style.bg_color                   = Color(0.25, 0.25, 0.25, 0.9)
+	bg_style.border_color               = Color(0.5, 0.5, 0.5, 1.0)
 	bg_style.border_width_top    = 2
 	bg_style.border_width_bottom = 2
 	bg_style.border_width_left   = 2
@@ -77,14 +93,16 @@ func _crear_slot(i: int, slot_size: int, padding: int) -> Control:
 	bg_style.corner_radius_bottom_right = 3
 	bg.add_theme_stylebox_override("panel", bg_style)
 	slot.add_child(bg)
+
 	var icon = TextureRect.new()
 	icon.name = "Icon"
 	icon.size = Vector2(slot_size - 8, slot_size - 8)
 	icon.position = Vector2(4, 4)
-	icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(icon)
+
 	var lbl = Label.new()
 	lbl.name = "Cantidad"
 	lbl.size = Vector2(slot_size, slot_size)
