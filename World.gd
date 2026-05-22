@@ -11,8 +11,10 @@ var alturas      = {}   # Vector2i (tile_x, tile_z) -> int altura modificada
 var recolectados = {}   # Vector2i (tile_x, tile_z) -> true  (objeto ya fue cortado)
 var player_chunk = Vector2i(999, 999)
 
-var mat_top:  StandardMaterial3D
-var mat_side: StandardMaterial3D
+var mat_top:   StandardMaterial3D
+var mat_side:  StandardMaterial3D
+var mat_dirt:  StandardMaterial3D
+var mat_rock:  StandardMaterial3D
 
 var noise: FastNoiseLite
 
@@ -22,15 +24,28 @@ var cursor_pick: Texture2D
 var hovered_resource: Node3D = null
 
 # Para highlight del bloque de suelo hover
-var hovered_tile_pos: Vector3 = Vector3.INF
-var tile_highlight: MeshInstance3D = null
+var hovered_tile_pos:  Vector3 = Vector3.INF
+var hovered_place_pos: Vector3 = Vector3.INF   # dónde se colocaría un bloque (clic derecho)
+var tile_highlight:    MeshInstance3D = null
+var place_highlight:   MeshInstance3D = null
 
 @onready var player: CharacterBody3D = get_node("Player")
 var camera: Camera3D = null
 
+# ── HUD / Inventario ─────────────────────────────────────────────────
+var hud: CanvasLayer = null
+
 func _ready() -> void:
 	mat_top  = _mat(load("res://textures/grass_top.png"))
 	mat_side = _mat(load("res://textures/grass_side.png"))
+	if ResourceLoader.exists("res://textures/dirt.png"):
+		mat_dirt = _mat(load("res://textures/dirt.png"))
+	else:
+		mat_dirt = mat_side
+	if ResourceLoader.exists("res://textures/rock.png"):
+		mat_rock = _mat_from_color(Color(0.5, 0.5, 0.5))
+	else:
+		mat_rock = mat_dirt
 
 	camera = _find_camera(get_tree().root)
 
@@ -39,8 +54,14 @@ func _ready() -> void:
 	if ResourceLoader.exists("res://textures/cursor_pick.png"):
 		cursor_pick = load("res://textures/cursor_pick.png")
 
-	# Crear indicador visual del tile seleccionado
 	_crear_tile_highlight()
+	_crear_place_highlight()
+
+	# Cargar HUD
+	if ResourceLoader.exists("res://HUD.tscn"):
+		var hud_scene = load("res://HUD.tscn")
+		hud = hud_scene.instantiate()
+		add_child(hud)
 
 	noise = FastNoiseLite.new()
 	noise.seed               = randi()
@@ -65,19 +86,33 @@ func _find_camera(node: Node) -> Camera3D:
 	return null
 
 func _crear_tile_highlight() -> void:
-	# Un quad amarillo semitransparente que se pone encima del tile hover
 	tile_highlight = MeshInstance3D.new()
 	var quad = PlaneMesh.new()
 	quad.size = Vector2(TILE_SIZE - 0.1, TILE_SIZE - 0.1)
 	tile_highlight.mesh = quad
 	var mat = StandardMaterial3D.new()
-	mat.albedo_color    = Color(1.0, 0.9, 0.2, 0.45)
-	mat.transparency    = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.no_depth_test   = false
+	mat.albedo_color  = Color(1.0, 0.9, 0.2, 0.45)
+	mat.transparency  = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = false
 	tile_highlight.material_override = mat
 	tile_highlight.visible = false
 	add_child(tile_highlight)
+
+func _crear_place_highlight() -> void:
+	# Highlight azul semitransparente para indicar dónde se colocará un bloque
+	place_highlight = MeshInstance3D.new()
+	var quad = PlaneMesh.new()
+	quad.size = Vector2(TILE_SIZE - 0.1, TILE_SIZE - 0.1)
+	place_highlight.mesh = quad
+	var mat = StandardMaterial3D.new()
+	mat.albedo_color  = Color(0.2, 0.6, 1.0, 0.45)
+	mat.transparency  = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.no_depth_test = false
+	place_highlight.material_override = mat
+	place_highlight.visible = false
+	add_child(place_highlight)
 
 func _process(_delta: float) -> void:
 	var pc = mundo_a_chunk(player.global_position)
@@ -98,13 +133,15 @@ func _actualizar_cursor() -> void:
 	params.collide_with_areas = false
 	var result = space.intersect_ray(params)
 
-	# Resetear highlight de recurso
+	# Resetear highlights
 	if hovered_resource != null and is_instance_valid(hovered_resource):
 		_set_highlight(hovered_resource, false)
 		hovered_resource = null
 
-	tile_highlight.visible = false
-	hovered_tile_pos = Vector3.INF
+	tile_highlight.visible  = false
+	place_highlight.visible = false
+	hovered_tile_pos  = Vector3.INF
+	hovered_place_pos = Vector3.INF
 
 	if result.is_empty():
 		Input.set_custom_mouse_cursor(null)
@@ -132,52 +169,101 @@ func _actualizar_cursor() -> void:
 			_set_highlight(body, true)
 
 		_:
-			# Es terreno — mostrar highlight del tile y cursor de pico
 			var hit_pos = result["position"]
 			var tx = int(floor(hit_pos.x / TILE_SIZE + 0.5))
 			var tz = int(floor(hit_pos.z / TILE_SIZE + 0.5))
 			var h  = altura_en(float(tx) * TILE_SIZE, float(tz) * TILE_SIZE)
+
+			var tiene_bloque_activo = hud != null and hud.item_activo() in ["tierra", "cesped", "piedra", "madera"]
+
 			if h > 0:
-				# Solo se puede picar si hay altura > 0
 				if cursor_pick:
 					Input.set_custom_mouse_cursor(cursor_pick, Input.CURSOR_ARROW, Vector2(2, 8))
 				var top_y = float(h) * BLOCK_H + BLOCK_H + 0.02
 				tile_highlight.global_position = Vector3(float(tx) * TILE_SIZE, top_y, float(tz) * TILE_SIZE)
 				tile_highlight.visible = true
 				hovered_tile_pos = Vector3(float(tx) * TILE_SIZE, 0, float(tz) * TILE_SIZE)
+
+			# Highlight de colocación (encima del tile apuntado)
+			if tiene_bloque_activo:
+				var place_y = float(h + 1) * BLOCK_H + BLOCK_H + 0.02
+				place_highlight.global_position = Vector3(float(tx) * TILE_SIZE, place_y, float(tz) * TILE_SIZE)
+				place_highlight.visible = true
+				hovered_place_pos = Vector3(float(tx) * TILE_SIZE, 0, float(tz) * TILE_SIZE)
 			else:
-				Input.set_custom_mouse_cursor(null)
+				if h <= 0:
+					Input.set_custom_mouse_cursor(null)
 
 func _input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed):
+	if not (event is InputEventMouseButton and event.pressed):
 		return
 
-	# Recolectar recurso (árbol/roca)
-	if hovered_resource != null and is_instance_valid(hovered_resource):
-		_recolectar(hovered_resource)
-		hovered_resource = null
-		Input.set_custom_mouse_cursor(null)
-		return
+	# ── Clic izquierdo: recolectar o picar ───────────────────────────
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		if hovered_resource != null and is_instance_valid(hovered_resource):
+			_recolectar(hovered_resource)
+			hovered_resource = null
+			Input.set_custom_mouse_cursor(null)
+			return
+		if hovered_tile_pos != Vector3.INF:
+			_picar_bloque(hovered_tile_pos.x, hovered_tile_pos.z)
 
-	# Picar bloque de suelo
-	if hovered_tile_pos != Vector3.INF:
-		_picar_bloque(hovered_tile_pos.x, hovered_tile_pos.z)
+	# ── Clic derecho: colocar bloque ─────────────────────────────────
+	elif event.button_index == MOUSE_BUTTON_RIGHT:
+		if hud == null:
+			return
+		var tipo_activo = hud.item_activo()
+		if tipo_activo == "":
+			return
+		if hovered_place_pos != Vector3.INF:
+			_colocar_bloque(hovered_place_pos.x, hovered_place_pos.z, tipo_activo)
 
+# ── PICAR BLOQUE ─────────────────────────────────────────────────────
 func _picar_bloque(wx: float, wz: float) -> void:
 	var tile_key = Vector2i(int(round(wx / TILE_SIZE)), int(round(wz / TILE_SIZE)))
 	var h_actual = altura_en(wx, wz)
 	if h_actual <= 0:
 		return
 
-	# Guardar nueva altura (uno menos)
 	alturas[tile_key] = h_actual - 1
 
-	# Regenerar el chunk de este tile y sus vecinos (por si afecta caras)
+	# Agregar tierra al inventario
+	if hud != null:
+		hud.agregar_item("tierra")
+
+	_regenerar_chunk_y_vecinos(wx, wz)
+	tile_highlight.visible  = false
+	place_highlight.visible = false
+	hovered_tile_pos  = Vector3.INF
+	hovered_place_pos = Vector3.INF
+	print("Picado bloque en (", wx, ",", wz, ") nueva altura: ", h_actual - 1)
+
+# ── COLOCAR BLOQUE ───────────────────────────────────────────────────
+func _colocar_bloque(wx: float, wz: float, _tipo: String) -> void:
+	var tile_key = Vector2i(int(round(wx / TILE_SIZE)), int(round(wz / TILE_SIZE)))
+	var h_actual = altura_en(wx, wz)
+
+	# Consumir ítem del inventario
+	if hud != null:
+		hud.quitar_item_activo()
+
+	alturas[tile_key] = h_actual + 1
+
+	# Si el tile estaba en recolectados, quitarlo para que pueda tener objetos de nuevo
+	if recolectados.has(tile_key):
+		recolectados.erase(tile_key)
+
+	_regenerar_chunk_y_vecinos(wx, wz)
+	tile_highlight.visible  = false
+	place_highlight.visible = false
+	hovered_tile_pos  = Vector3.INF
+	hovered_place_pos = Vector3.INF
+	print("Colocado bloque en (", wx, ",", wz, ") nueva altura: ", h_actual + 1)
+
+func _regenerar_chunk_y_vecinos(wx: float, wz: float) -> void:
 	var cx = int(floor(wx / (CHUNK_SIZE * TILE_SIZE)))
 	var cz = int(floor(wz / (CHUNK_SIZE * TILE_SIZE)))
 	_regenerar_chunk(cx, cz)
-
-	# Regenerar chunks vecinos que podrían verse afectados en sus bordes
 	var tile_x_in_chunk = int(floor(wx / TILE_SIZE)) - cx * CHUNK_SIZE
 	var tile_z_in_chunk = int(floor(wz / TILE_SIZE)) - cz * CHUNK_SIZE
 	if tile_x_in_chunk == 0:            _regenerar_chunk(cx - 1, cz)
@@ -185,29 +271,29 @@ func _picar_bloque(wx: float, wz: float) -> void:
 	if tile_z_in_chunk == 0:            _regenerar_chunk(cx, cz - 1)
 	if tile_z_in_chunk == CHUNK_SIZE-1: _regenerar_chunk(cx, cz + 1)
 
-	tile_highlight.visible = false
-	hovered_tile_pos = Vector3.INF
-	print("Picado bloque en (", wx, ",", wz, ") nueva altura: ", h_actual - 1)
-
 func _regenerar_chunk(cx: int, cz: int) -> void:
 	var key = Vector2i(cx, cz)
 	if not chunks.has(key):
 		return
-	# Eliminar chunk viejo
 	var old = chunks[key]
 	if is_instance_valid(old):
 		old.queue_free()
 	chunks.erase(key)
-	# Regenerar
 	chunks[key] = true
 	generar_chunk(cx, cz)
 
 func _recolectar(body: Node3D) -> void:
 	var tipo = body.get_meta("tipo", "")
-	# Marcar el tile como recolectado para que no reaparezca al regenerar el chunk
-	var pos = body.global_position
+	var pos  = body.global_position
 	var tile_key = Vector2i(int(round(pos.x / TILE_SIZE)), int(round(pos.z / TILE_SIZE)))
 	recolectados[tile_key] = true
+
+	# Agregar al inventario según tipo
+	if hud != null:
+		match tipo:
+			"arbol": hud.agregar_item("madera")
+			"roca":  hud.agregar_item("piedra")
+
 	var tween = create_tween()
 	tween.tween_property(body, "scale", Vector3(0.01, 0.01, 0.01), 0.25)
 	tween.tween_callback(body.queue_free)
@@ -226,11 +312,9 @@ func mundo_a_chunk(pos: Vector3) -> Vector2i:
 	)
 
 func altura_en(wx: float, wz: float) -> int:
-	# Primero revisar si fue modificada manualmente
 	var tile_key = Vector2i(int(round(wx / TILE_SIZE)), int(round(wz / TILE_SIZE)))
 	if alturas.has(tile_key):
 		return alturas[tile_key]
-	# Si no, calcular del noise
 	var n = noise.get_noise_2d(wx, wz)
 	return max(0, int(floor((n * 0.5 + 0.5) * HEIGHT_SCALE)))
 
@@ -242,6 +326,12 @@ func _mat(tex: Texture2D) -> StandardMaterial3D:
 	m.transparency   = BaseMaterial3D.TRANSPARENCY_DISABLED
 	m.cull_mode      = BaseMaterial3D.CULL_DISABLED
 	m.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return m
+
+func _mat_from_color(col: Color) -> StandardMaterial3D:
+	var m = StandardMaterial3D.new()
+	m.albedo_color = col
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
 
 # ── CHUNKS ────────────────────────────────────────────────────────────

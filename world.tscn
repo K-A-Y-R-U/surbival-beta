@@ -3,6 +3,7 @@
 [ext_resource type="PackedScene" uid="uid://ch3pkvolkiivn" path="res://player.tscn" id="1_f3sb7"]
 [ext_resource type="Script" uid="uid://cn5eoe3bgwa84" path="res://World.gd" id="1_fj7yv"]
 [ext_resource type="Script" uid="uid://bckgbra16lmwr" path="res://camera_pivot.gd" id="3_tlwt5"]
+[ext_resource type="PackedScene" path="res://HUD.tscn" id="4_aqk2v"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_gv5m4"]
 size = Vector2(40, 40)
@@ -41,3 +42,5 @@ shadow_enabled = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1465559683]
 environment = SubResource("Environment_f3sb7")
+
+[node name="HUD" parent="." unique_id=926285783 instance=ExtResource("4_aqk2v")]
