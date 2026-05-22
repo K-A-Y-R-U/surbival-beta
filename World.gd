@@ -8,6 +8,7 @@ const BLOCK_H         = 1.5
 
 var chunks       = {}   # Vector2i -> Node3D (el chunk_node)
 var alturas      = {}   # Vector2i (tile_x, tile_z) -> int altura modificada
+var recolectados = {}   # Vector2i (tile_x, tile_z) -> true  (objeto ya fue cortado)
 var player_chunk = Vector2i(999, 999)
 
 var mat_top:  StandardMaterial3D
@@ -203,6 +204,10 @@ func _regenerar_chunk(cx: int, cz: int) -> void:
 
 func _recolectar(body: Node3D) -> void:
 	var tipo = body.get_meta("tipo", "")
+	# Marcar el tile como recolectado para que no reaparezca al regenerar el chunk
+	var pos = body.global_position
+	var tile_key = Vector2i(int(round(pos.x / TILE_SIZE)), int(round(pos.z / TILE_SIZE)))
+	recolectados[tile_key] = true
 	var tween = create_tween()
 	tween.tween_property(body, "scale", Vector3(0.01, 0.01, 0.01), 0.25)
 	tween.tween_callback(body.queue_free)
@@ -296,11 +301,16 @@ func generar_chunk(cx: int, cz: int) -> void:
 				if h_o <= y:
 					_face_side(wx, by, wz, 3, st_side); side_verts += 1
 
-			var r  = randf()
-			var sy = float(h) * BLOCK_H + BLOCK_H * 0.5 + 0.05
-			if   r < 0.06: _arbol(   Vector3(wx, sy, wz), chunk_node)
-			elif r < 0.10: _roca(    Vector3(wx, sy, wz), chunk_node)
-			elif r < 0.12: _arbusto( Vector3(wx, sy, wz), chunk_node)
+			var tile_x = cx * CHUNK_SIZE + x
+			var tile_z = cz * CHUNK_SIZE + z
+			var tile_key_spawn = Vector2i(int(round(wx / TILE_SIZE)), int(round(wz / TILE_SIZE)))
+			var fue_picado = alturas.has(tile_key_spawn)
+			if h > 0 and not fue_picado and not recolectados.has(tile_key_spawn):
+				var r = fmod(abs(sin(float(tile_x) * 127.1 + float(tile_z) * 311.7 + float(noise.seed))) * 43758.5453, 1.0)
+				var sy = float(h) * BLOCK_H + BLOCK_H * 0.5 + 0.05
+				if   r < 0.06: _arbol(   Vector3(wx, sy, wz), chunk_node)
+				elif r < 0.10: _roca(    Vector3(wx, sy, wz), chunk_node)
+				elif r < 0.12: _arbusto( Vector3(wx, sy, wz), chunk_node)
 
 	st_top.generate_normals()
 	st_top.set_material(mat_top)
